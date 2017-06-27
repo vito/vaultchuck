@@ -13,6 +13,7 @@ import (
 	"github.com/cloudfoundry-incubator/spiff/yaml"
 	vaultapi "github.com/hashicorp/vault/api"
 	flags "github.com/jessevdk/go-flags"
+	"github.com/vito/go-interact/interact"
 )
 
 var interpolationRegex = regexp.MustCompile(`\(\((!?[-\.\w\pL]+)\)\)`)
@@ -67,10 +68,26 @@ func (cmd *Command) Execute(args []string) error {
 		return err
 	}
 
-	vaultClient, err := vaultapi.NewClient(vaultapi.DefaultConfig())
+	config := vaultapi.DefaultConfig()
+	err = config.ReadEnvironment()
 	if err != nil {
 		return err
 	}
+
+	vaultClient, err := vaultapi.NewClient(config)
+	if err != nil {
+		return err
+	}
+
+	var vaultToken interact.Password
+	if !cmd.DryRun {
+		err := interact.NewInteraction("vault token").Resolve(interact.Required(&vaultToken))
+		if err != nil {
+			return err
+		}
+	}
+
+	vaultClient.SetToken(string(vaultToken))
 
 	vaultValues := map[string]map[string]interface{}{}
 
